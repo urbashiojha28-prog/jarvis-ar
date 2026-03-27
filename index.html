@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>J.A.R.V.I.S — Air Interface</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --cyan:   #00f5ff;
+    --blue:   #0088ff;
+    --gold:   #ffaa00;
+    --red:    #ff3355;
+    --green:  #00ff88;
+    --bg:     #020810;
+    --panel:  rgba(0,20,40,0.7);
+    --glow:   0 0 8px var(--cyan), 0 0 20px rgba(0,245,255,0.3);
+    --glow-r: 0 0 8px var(--red),  0 0 20px rgba(255,51,85,0.3);
+    --glow-g: 0 0 8px var(--green),0 0 20px rgba(0,255,136,0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--cyan);
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+    cursor: none;
+  }
+
+  /* ── CANVAS LAYERS ───────────────────────────────── */
+  #videoEl {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0.55;
+  }
+
+  #drawCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  #uiCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* ── HUD OVERLAYS ────────────────────────────────── */
+  #hud {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .grid-overlay {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,245,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,255,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  .corner { position: absolute; width: 60px; height: 60px; }
+  .corner::before, .corner::after {
+    content: ''; position: absolute;
+    background: var(--cyan);
+    box-shadow: var(--glow);
+  }
+  .corner::before { width: 2px; height: 40px; }
+  .corner::after  { width: 40px; height: 2px; }
+  .corner.tl { top:16px; left:16px; }
+  .corner.tl::before { top:0; left:0; }
+  .corner.tl::after  { top:0; left:0; }
+  .corner.tr { top:16px; right:16px; transform: scaleX(-1); }
+  .corner.tr::before { top:0; left:0; }
+  .corner.tr::after  { top:0; left:0; }
+  .corner.bl { bottom:56px; left:16px; transform: scaleY(-1); }
+  .corner.bl::before { top:0; left:0; }
+  .corner.bl::after  { top:0; left:0; }
+  .corner.br { bottom:56px; right:16px; transform: scale(-1); }
+  .corner.br::before { top:0; left:0; }
+  .corner.br::after  { top:0; left:0; }
+
+  /* ── TOP BAR ─────────────────────────────────────── */
+  #topbar {
+    position: absolute; top:0; left:0; right:0;
+    height: 48px;
+    background: linear-gradient(180deg, rgba(0,10,25,0.9) 0%, transparent 100%);
+    display: flex; align-items: center;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(0,245,255,0.15);
+    pointer-events: none;
+  }
+  #topbar .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px; font-weight: 900;
+    color: var(--cyan);
+    text-shadow: var(--glow);
+    letter-spacing: 4px;
+  }
+  #topbar .status {
+    margin-left: auto;
+    display: flex; gap: 24px; align-items: center;
+    font-size: 11px; color: rgba(0,245,255,0.6);
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: var(--glow-g);
+    animation: blink 2s infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── BOTTOM BAR ──────────────────────────────────── */
+  #bottombar {
+    position: absolute; bottom:0; left:0; right:0;
+    height: 48px;
+    background: linear-gradient(0deg, rgba(0,10,25,0.95) 0%, transparent 100%);
+    display: flex; align-items: center;
+    padding: 0 24px; gap: 32px;
+    border-top: 1px solid rgba(0,245,255,0.15);
+    pointer-events: none;
+  }
+  #gestureLabel {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px; font-weight: 700;
+    color: var(--cyan);
+    text-shadow: var(--glow);
+    letter-spacing: 2px;
+    min-width: 200px;
+  }
+  #fpsLabel { font-size: 11px; color: rgba(0,245,255,0.5); margin-left:auto; }
+
+  /* ── SIDE PANEL ──────────────────────────────────── */
+  #sidePanel {
+    position: absolute; top: 60px; right: 16px;
+    width: 180px;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: all;
+  }
+  .panel-btn {
+    background: rgba(0,20,40,0.8);
+    border: 1px solid rgba(0,245,255,0.25);
+    color: var(--cyan);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 8px 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-btn:hover {
+    background: rgba(0,245,255,0.1);
+    border-color: var(--cyan);
+    box-shadow: var(--glow);
+    color: #fff;
+  }
+  .panel-btn.active {
+    background: rgba(0,245,255,0.15);
+    border-color: var(--cyan);
+    box-shadow: var(--glow);
+  }
+  .panel-divider {
+    height: 1px;
+    background: rgba(0,245,255,0.15);
+    margin: 4px 0;
+  }
+  .panel-label {
+    font-size: 9px;
+    color: rgba(0,245,255,0.4);
+    letter-spacing: 2px;
+    padding: 0 4px;
+  }
+
+  /* color swatches */
+  #colorRow {
+    display: flex; gap: 6px; padding: 4px;
+  }
+  .swatch {
+    width: 24px; height: 24px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .swatch:hover, .swatch.active { transform: scale(1.25); }
+  .swatch.active { border-color: #fff; box-shadow: 0 0 8px currentColor; }
+
+  /* brush size */
+  #sizeSlider {
+    width: 100%;
+    accent-color: var(--cyan);
+    cursor: pointer;
+  }
+
+  /* ── GESTURE GUIDE ───────────────────────────────── */
+  #gestureGuide {
+    position: absolute; top: 60px; left: 16px;
+    width: 170px;
+    background: rgba(0,10,25,0.85);
+    border: 1px solid rgba(0,245,255,0.2);
+    padding: 12px;
+    font-size: 10px;
+    line-height: 1.9;
+    color: rgba(0,245,255,0.7);
+  }
+  #gestureGuide .g-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    margin-bottom: 8px;
+    text-shadow: var(--glow);
+  }
+  .g-row { display:flex; gap:6px; align-items:baseline; }
+  .g-icon { font-size: 13px; min-width: 20px; }
+  #hideGuide {
+    margin-top: 8px;
+    font-size: 9px;
+    color: rgba(0,245,255,0.4);
+    cursor: pointer;
+    pointer-events: all;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #hideGuide:hover { color: var(--cyan); }
+
+  /* ── MODE TOAST ──────────────────────────────────── */
+  #modeToast {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Orbitron', monospace;
+    font-size: 22px; font-weight: 900;
+    color: var(--cyan);
+    text-shadow: var(--glow);
+    letter-spacing: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    text-align: center;
+  }
+
+  /* ── VOICE UI ────────────────────────────────────── */
+  #voiceOverlay {
+    position: absolute; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    background: rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+  #voiceOverlay.active { display: flex; }
+  .voice-ring {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    box-shadow: var(--glow-r), inset 0 0 30px rgba(255,51,85,0.2);
+    animation: voicePulse 0.8s infinite alternate;
+  }
+  @keyframes voicePulse {
+    from { transform: scale(1);   opacity: 1; }
+    to   { transform: scale(1.15); opacity: 0.7; }
+  }
+  #voiceText {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px; letter-spacing: 3px;
+    color: var(--red);
+    text-shadow: var(--glow-r);
+  }
+
+  /* ── IMAGE UPLOAD ────────────────────────────────── */
+  #imgUpload { display: none; }
+
+  /* ── SCAN RING (bottom right) ────────────────────── */
+  #scanRing {
+    position: absolute; bottom: 60px; right: 20px;
+    width: 60px; height: 60px;
+    pointer-events: none;
+  }
+
+  /* ── CUSTOM CURSOR ───────────────────────────────── */
+  #cursor {
+    position: absolute;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--cyan);
+    box-shadow: var(--glow);
+    pointer-events: none;
+    transform: translate(-50%,-50%);
+    transition: border-color 0.1s, box-shadow 0.1s;
+    z-index: 999;
+  }
+
+  /* ── FLOATING OBJECTS ────────────────────────────── */
+  .float-obj {
+    position: absolute;
+    cursor: grab;
+    user-select: none;
+    border: 1px solid rgba(0,245,255,0.4);
+    padding: 6px 12px;
+    background: rgba(0,15,35,0.75);
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    color: var(--cyan);
+    text-shadow: var(--glow);
+    box-shadow: var(--glow);
+    letter-spacing: 2px;
+    transform-origin: center center;
+  }
+  .float-obj:active { cursor: grabbing; }
+  .float-obj.selected {
+    border-color: var(--green);
+    box-shadow: var(--glow-g);
+    color: var(--green);
+  }
+  .float-obj img {
+    display: block;
+    max-width: 100%;
+    pointer-events: none;
+  }
+  .obj-controls {
+    position: absolute; top: -26px; right: 0;
+    display: flex; gap: 4px;
+  }
+  .obj-btn {
+    background: rgba(0,20,40,0.9);
+    border: 1px solid rgba(0,245,255,0.3);
+    color: var(--cyan);
+    font-size: 10px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-family: 'Share Tech Mono', monospace;
+    transition: all 0.15s;
+  }
+  .obj-btn:hover {
+    background: rgba(0,245,255,0.15);
+    border-color: var(--cyan);
+  }
+  .obj-btn.del { border-color: rgba(255,51,85,0.4); color: var(--red); }
+  .obj-btn.del:hover { background: rgba(255,51,85,0.15); border-color: var(--red); }
+
+  #objectLayer {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  #objectLayer .float-obj { pointer-events: all; }
+
+  /* resize handle */
+  .resize-handle {
+    position: absolute; bottom: -6px; right: -6px;
+    width: 12px; height: 12px;
+    background: var(--cyan);
+    box-shadow: var(--glow);
+    cursor: se-resize;
+  }
+
+  /* ── ADD TEXT DIALOG ─────────────────────────────── */
+  #textDialog {
+    display: none;
+    position: absolute; top:50%; left:50%;
+    transform: translate(-50%,-50%);
+    background: rgba(0,10,25,0.97);
+    border: 1px solid var(--cyan);
+    box-shadow: var(--glow);
+    padding: 24px;
+    width: 340px;
+    z-index: 200;
+    pointer-events: all;
+  }
+  #textDialog h3 {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px; letter-spacing: 3px;
+    color: var(--cyan); margin-bottom: 16px;
+  }
+  #textInput {
+    width: 100%;
+    background: rgba(0,20,40,0.8);
+    border: 1px solid rgba(0,245,255,0.3);
+    color: var(--cyan);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    padding: 8px 12px;
+    outline: none;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  #textInput:focus { border-color: var(--cyan); box-shadow: var(--glow); }
+  .dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<!-- VIDEO -->
+<video id="videoEl" autoplay playsinline muted></video>
+
+<!-- CANVAS LAYERS -->
+<canvas id="drawCanvas"></canvas>
+<canvas id="uiCanvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="grid-overlay"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">◈ J.A.R.V.I.S &nbsp; v2.0</div>
+  <div class="status">
+    <div class="status-dot"></div>
+    <span id="timeLabel">00:00:00</span>
+    <span id="handStatus">NO HAND</span>
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div id="bottombar">
+  <div id="gestureLabel">◌ STANDBY</div>
+  <div id="fpsLabel">FPS --</div>
+</div>
+
+<!-- SIDE PANEL -->
+<div id="sidePanel">
+  <div class="panel-label">TOOLS</div>
+  <button class="panel-btn active" id="btnDraw">✏ DRAW</button>
+  <button class="panel-btn" id="btnErase">◌ ERASE</button>
+  <button class="panel-btn" id="btnClear">✕ CLEAR ALL</button>
+  <div class="panel-divider"></div>
+  <div class="panel-label">ADD OBJECT</div>
+  <button class="panel-btn" id="btnAddText">⌨ ADD TEXT</button>
+  <button class="panel-btn" id="btnAddImg">⊕ LOAD IMAGE</button>
+  <div class="panel-divider"></div>
+  <div class="panel-label">BRUSH COLOR</div>
+  <div id="colorRow">
+    <div class="swatch active" data-color="#00f5ff" style="background:#00f5ff"></div>
+    <div class="swatch" data-color="#ff3355" style="background:#ff3355"></div>
+    <div class="swatch" data-color="#00ff88" style="background:#00ff88"></div>
+    <div class="swatch" data-color="#ffaa00" style="background:#ffaa00"></div>
+    <div class="swatch" data-color="#ffffff" style="background:#ffffff"></div>
+  </div>
+  <div class="panel-label" style="margin-top:4px">BRUSH SIZE</div>
+  <input type="range" id="sizeSlider" min="1" max="20" value="4">
+</div>
+
+<!-- GESTURE GUIDE -->
+<div id="gestureGuide">
+  <div class="g-title">GESTURE GUIDE</div>
+  <div class="g-row"><span class="g-icon">☝️</span> Index → Draw</div>
+  <div class="g-row"><span class="g-icon">✌️</span> Peace → Select</div>
+  <div class="g-row"><span class="g-icon">✊</span> Fist → Drag</div>
+  <div class="g-row"><span class="g-icon">🤏</span> Pinch → Resize</div>
+  <div class="g-row"><span class="g-icon">🖐</span> Open → Erase</div>
+  <div class="g-row"><span class="g-icon">👍</span> Thumb → Clear</div>
+  <div id="hideGuide">[ HIDE GUIDE ]</div>
+</div>
+
+<!-- OBJECT LAYER -->
+<div id="objectLayer"></div>
+
+<!-- MODE TOAST -->
+<div id="modeToast"></div>
+
+<!-- VOICE OVERLAY -->
+<div id="voiceOverlay">
+  <div class="voice-ring"></div>
+  <div id="voiceText">◉ LISTENING...</div>
+</div>
+
+<!-- SCAN RING SVG -->
+<svg id="scanRing" viewBox="0 0 60 60">
+  <circle cx="30" cy="30" r="24" fill="none" stroke="rgba(0,245,255,0.15)" stroke-width="1"/>
+  <path id="scanArc" fill="none" stroke="#00f5ff" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="30" cy="30" r="3" fill="#00f5ff" opacity="0.8"/>
+  <text x="30" y="44" text-anchor="middle" font-family="Share Tech Mono" font-size="5" fill="rgba(0,245,255,0.5)">SCAN</text>
+</svg>
+
+<!-- CUSTOM CURSOR -->
+<div id="cursor"></div>
+
+<!-- FILE INPUT -->
+<input type="file" id="imgUpload" accept="image/*">
+
+<!-- ADD TEXT DIALOG -->
+<div id="textDialog">
+  <h3>◈ ADD FLOATING LABEL</h3>
+  <input type="text" id="textInput" placeholder="ENTER TEXT..." maxlength="40">
+  <div class="dialog-btns">
+    <button class="panel-btn" id="btnTextCancel">CANCEL</button>
+    <button class="panel-btn active" id="btnTextOk">ADD →</button>
+  </div>
+</div>
+
+<!-- MEDIAPIPE -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+const state = {
+  tool:        'draw',       // draw | erase
+  color:       '#00f5ff',
+  brushSize:   4,
+  gesture:     'none',
+  prevGesture: 'none',
+  drawing:     false,
+  lastPt:      null,
+  erasing:     false,
+  fps:         0,
+  prevTime:    0,
+  handDetected: false,
+  scanAngle:   0,
+  selectedObj: null,
+  dragOffset:  {x:0,y:0},
+  pinchStart:  null,
+  scaleStart:  1,
+  objects:     [],
+};
+
+// ═══════════════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════════════
+const video   = document.getElementById('videoEl');
+const drawCvs = document.getElementById('drawCanvas');
+const uiCvs   = document.getElementById('uiCanvas');
+const dctx    = drawCvs.getContext('2d');
+const uctx    = uiCvs.getContext('2d');
+
+function resize() {
+  drawCvs.width = uiCvs.width = window.innerWidth;
+  drawCvs.height = uiCvs.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════
+function showToast(msg, duration=1200) {
+  const el = document.getElementById('modeToast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.opacity = '0', duration);
+}
+
+function setGestureLabel(g) {
+  const icons = {
+    draw:      '✏  DRAW MODE',
+    select:    '✌  SELECT MODE',
+    fist:      '✊  DRAG MODE',
+    erase:     '🖐  ERASE MODE',
+    pinch:     '🤏  RESIZE MODE',
+    thumbs_up: '👍  CLEARING...',
+    none:      '◌  STANDBY',
+  };
+  document.getElementById('gestureLabel').textContent = icons[g] || '◌ ' + g.toUpperCase();
+}
+
+// ═══════════════════════════════════════════════════
+//  DRAWING
+// ═══════════════════════════════════════════════════
+function drawGlowLine(ctx, x1,y1,x2,y2, color, size) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // glow layers
+  [size*4, size*2.5, size].forEach((w,i) => {
+    ctx.globalAlpha = [0.06, 0.12, 0.9][i];
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = w;
+    ctx.shadowBlur  = i === 2 ? 12 : 0;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function eraseAt(x, y, r) {
+  dctx.save();
+  dctx.globalCompositeOperation = 'destination-out';
+  dctx.beginPath();
+  dctx.arc(x, y, r, 0, Math.PI*2);
+  dctx.fillStyle = 'rgba(0,0,0,1)';
+  dctx.fill();
+  dctx.restore();
+}
+
+// ═══════════════════════════════════════════════════
+//  FLOATING OBJECTS
+// ═══════════════════════════════════════════════════
+let objId = 0;
+
+function createTextObj(text, x, y) {
+  const id  = 'obj_' + (++objId);
+  const div = document.createElement('div');
+  div.className = 'float-obj';
+  div.id = id;
+  div.style.left = x + 'px';
+  div.style.top  = y + 'px';
+
+  const ctrl = document.createElement('div');
+  ctrl.className = 'obj-controls';
+  ctrl.innerHTML = `<button class="obj-btn del" data-id="${id}">✕</button>`;
+
+  const span = document.createElement('span');
+  span.textContent = text;
+
+  const rh = document.createElement('div');
+  rh.className = 'resize-handle';
+
+  div.appendChild(ctrl);
+  div.appendChild(span);
+  div.appendChild(rh);
+  document.getElementById('objectLayer').appendChild(div);
+  makeDraggable(div);
+  makeResizable(div, rh);
+  state.objects.push(id);
+
+  // fade in
+  div.style.opacity = '0';
+  div.style.transition = 'opacity 0.3s';
+  requestAnimationFrame(() => div.style.opacity = '1');
+
+  return div;
+}
+
+function createImageObj(src, x, y) {
+  const id  = 'obj_' + (++objId);
+  const div = document.createElement('div');
+  div.className = 'float-obj';
+  div.id = id;
+  div.style.left = x + 'px';
+  div.style.top  = y + 'px';
+  div.style.padding = '4px';
+
+  const ctrl = document.createElement('div');
+  ctrl.className = 'obj-controls';
+  ctrl.innerHTML = `<button class="obj-btn del" data-id="${id}">✕</button>`;
+
+  const img = document.createElement('img');
+  img.src = src;
+  img.style.width  = '280px';
+  img.style.height = 'auto';
+  img.style.display = 'block';
+  img.style.border = '1px solid rgba(0,245,255,0.3)';
+
+  const rh = document.createElement('div');
+  rh.className = 'resize-handle';
+
+  div.appendChild(ctrl);
+  div.appendChild(img);
+  div.appendChild(rh);
+  document.getElementById('objectLayer').appendChild(div);
+  makeDraggable(div);
+  makeResizable(div, rh);
+  state.objects.push(id);
+
+  div.style.opacity = '0';
+  div.style.transition = 'opacity 0.4s';
+  requestAnimationFrame(() => div.style.opacity = '1');
+
+  return div;
+}
+
+// ── Drag ──────────────────────────────────────────
+function makeDraggable(el) {
+  let ox, oy, sx, sy;
+  el.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('obj-btn') ||
+        e.target.classList.contains('resize-handle')) return;
+    el.style.cursor = 'grabbing';
+    sx = e.clientX; sy = e.clientY;
+    ox = el.offsetLeft; oy = el.offsetTop;
+    document.getElementById('objectLayer').appendChild(el); // bring to front
+
+    const onMove = e2 => {
+      el.style.left = (ox + e2.clientX - sx) + 'px';
+      el.style.top  = (oy + e2.clientY - sy) + 'px';
+    };
+    const onUp = () => {
+      el.style.cursor = 'grab';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  });
+
+  // touch drag
+  el.addEventListener('touchstart', e => {
+    if (e.target.classList.contains('obj-btn') ||
+        e.target.classList.contains('resize-handle')) return;
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY;
+    ox = el.offsetLeft; oy = el.offsetTop;
+    const onMove = e2 => {
+      const t2 = e2.touches[0];
+      el.style.left = (ox + t2.clientX - sx) + 'px';
+      el.style.top  = (oy + t2.clientY - sy) + 'px';
+    };
+    const onUp = () => {
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+    window.addEventListener('touchmove', onMove, {passive:false});
+    window.addEventListener('touchend', onUp);
+    e.preventDefault();
+  }, {passive:false});
+}
+
+// ── Resize ────────────────────────────────────────
+function makeResizable(el, handle) {
+  let sx, sy, sw, sh;
+  handle.addEventListener('mousedown', e => {
+    sx = e.clientX; sy = e.clientY;
+    sw = el.offsetWidth; sh = el.offsetHeight;
+    const onMove = e2 => {
+      const nw = Math.max(80, sw + e2.clientX - sx);
+      const nh = Math.max(40, sh + e2.clientY - sy);
+      el.style.width  = nw + 'px';
+      el.style.height = nh + 'px';
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    e.stopPropagation(); e.preventDefault();
+  });
+}
+
+// ── Delete buttons ────────────────────────────────
+document.getElementById('objectLayer').addEventListener('click', e => {
+  if (e.target.classList.contains('del')) {
+    const id = e.target.dataset.id;
+    document.getElementById(id)?.remove();
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  GESTURE CLASSIFICATION
+// ═══════════════════════════════════════════════════
+function fingerUp(lm, tip, pip) {
+  return lm[tip].y < lm[pip].y;
+}
+
+function classifyGesture(lm) {
+  const idx  = fingerUp(lm, 8,  6);
+  const mid  = fingerUp(lm, 12, 10);
+  const ring = fingerUp(lm, 16, 14);
+  const pink = fingerUp(lm, 20, 18);
+
+  // pinch
+  const dx = lm[4].x - lm[8].x;
+  const dy = lm[4].y - lm[8].y;
+  const pinchDist = Math.hypot(dx, dy);
+  if (pinchDist < 0.06) return 'pinch';
+
+  if (idx && !mid && !ring && !pink) return 'draw';
+  if (idx && mid && !ring && !pink)  return 'select';
+  if (!idx && !mid && !ring && !pink) return 'fist';
+  if (idx && mid && ring && pink)    return 'erase';
+
+  // thumbs up
+  const thumbUp = lm[4].y < lm[3].y && !idx && !mid && !ring && !pink;
+  if (thumbUp) return 'thumbs_up';
+
+  return 'none';
+}
+
+function getPinchDist(lm) {
+  return Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+}
+
+// ═══════════════════════════════════════════════════
+//  MEDIAPIPE SETUP
+// ═══════════════════════════════════════════════════
+const hands = new Hands({
+  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+});
+
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.6,
+});
+
+hands.onResults(onResults);
+
+// ═══════════════════════════════════════════════════
+//  RESULTS HANDLER
+// ═══════════════════════════════════════════════════
+function onResults(results) {
+  const W = uiCvs.width, H = uiCvs.height;
+  uctx.clearRect(0, 0, W, H);
+
+  const now = performance.now();
+  state.fps = Math.round(1000 / Math.max(1, now - state.prevTime));
+  state.prevTime = now;
+  document.getElementById('fpsLabel').textContent = `FPS ${state.fps}`;
+
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+    state.handDetected = false;
+    document.getElementById('handStatus').textContent = 'NO HAND';
+    state.drawing = false;
+    state.lastPt  = null;
+    state.prevGesture = 'none';
+    setGestureLabel('none');
+    return;
+  }
+
+  state.handDetected = true;
+  document.getElementById('handStatus').textContent = 'HAND LOCKED';
+
+  const lm = results.multiHandLandmarks[0];
+
+  // Flip x because video is mirrored
+  const ix = (1 - lm[8].x) * W;
+  const iy = lm[8].y * H;
+  const tx = (1 - lm[4].x) * W;
+  const ty = lm[4].y * H;
+
+  const gesture = classifyGesture(lm);
+  state.gesture = gesture;
+  setGestureLabel(gesture);
+
+  // ── Draw skeleton ──────────────────────────────
+  drawHandSkeleton(uctx, lm, W, H);
+
+  // ── Cursor ────────────────────────────────────
+  const cursorColors = {
+    draw: '#00f5ff', erase: '#ff3355', select: '#00ff88',
+    fist: '#ffaa00', pinch: '#0088ff'
+  };
+  drawCursor(uctx, ix, iy, cursorColors[gesture] || '#ffffff', gesture);
+
+  // ══════════════════════════════════════════════
+  //  GESTURE ACTIONS
+  // ══════════════════════════════════════════════
+
+  // ── DRAW ──────────────────────────────────────
+  if (gesture === 'draw' && state.tool === 'draw') {
+    if (state.lastPt) {
+      drawGlowLine(dctx, state.lastPt.x, state.lastPt.y, ix, iy,
+                   state.color, state.brushSize);
+    }
+    state.lastPt = {x: ix, y: iy};
+    if (state.prevGesture !== 'draw') showToast('DRAW');
+  } else {
+    state.lastPt = null;
+  }
+
+  // ── ERASE (gesture) ───────────────────────────
+  if (gesture === 'erase' || state.tool === 'erase') {
+    if (gesture === 'erase' || (gesture === 'draw' && state.tool === 'erase')) {
+      eraseAt(ix, iy, 30);
+      if (state.prevGesture !== 'erase') showToast('ERASE');
+    }
+  }
+
+  // ── SELECT ────────────────────────────────────
+  if (gesture === 'select') {
+    if (state.prevGesture !== 'select') showToast('SELECT');
+    // highlight nearest object under fingertip
+    document.querySelectorAll('.float-obj').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (ix >= r.left && ix <= r.right && iy >= r.top && iy <= r.bottom) {
+        el.classList.add('selected');
+        state.selectedObj = el;
+      } else {
+        el.classList.remove('selected');
+      }
+    });
+  }
+
+  // ── DRAG ──────────────────────────────────────
+  if (gesture === 'fist' && state.selectedObj) {
+    if (state.prevGesture !== 'fist') {
+      showToast('DRAG');
+      state.dragOffset = {
+        x: ix - state.selectedObj.offsetLeft,
+        y: iy - state.selectedObj.offsetTop
+      };
+    }
+    state.selectedObj.style.left = (ix - state.dragOffset.x) + 'px';
+    state.selectedObj.style.top  = (iy - state.dragOffset.y) + 'px';
+  }
+
+  // ── PINCH / RESIZE ────────────────────────────
+  if (gesture === 'pinch' && state.selectedObj) {
+    const pd = getPinchDist(lm) * W;
+    if (state.prevGesture !== 'pinch') {
+      showToast('RESIZE');
+      state.pinchStart = pd;
+      state.scaleStart = parseFloat(state.selectedObj.style.width) ||
+                         state.selectedObj.offsetWidth;
+    }
+    if (state.pinchStart) {
+      const newW = Math.max(60, state.scaleStart * (pd / state.pinchStart));
+      state.selectedObj.style.width = newW + 'px';
+    }
+  } else if (gesture !== 'pinch') {
+    state.pinchStart = null;
+  }
+
+  // ── THUMBS UP → CLEAR ─────────────────────────
+  if (gesture === 'thumbs_up' && state.prevGesture !== 'thumbs_up') {
+    clearAll();
+  }
+
+  state.prevGesture = gesture;
+}
+
+// ═══════════════════════════════════════════════════
+//  DRAW HAND SKELETON
+// ═══════════════════════════════════════════════════
+function drawHandSkeleton(ctx, lm, W, H) {
+  const connections = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [5,9],[9,10],[10,11],[11,12],
+    [9,13],[13,14],[14,15],[15,16],
+    [13,17],[17,18],[18,19],[19,20],[0,17]
+  ];
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,245,255,0.25)';
+  ctx.lineWidth = 1;
+  connections.forEach(([a,b]) => {
+    ctx.beginPath();
+    ctx.moveTo((1-lm[a].x)*W, lm[a].y*H);
+    ctx.lineTo((1-lm[b].x)*W, lm[b].y*H);
+    ctx.stroke();
+  });
+  // joints
+  lm.forEach(p => {
+    ctx.beginPath();
+    ctx.arc((1-p.x)*W, p.y*H, 2, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,245,255,0.4)';
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════
+//  DRAW CURSOR
+// ═══════════════════════════════════════════════════
+function drawCursor(ctx, x, y, color, gesture) {
+  ctx.save();
+  const r = gesture === 'erase' ? 30 : 10;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2;
+  ctx.shadowBlur  = 12;
+  ctx.shadowColor = color;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+
+  // Also move the CSS cursor
+  const cur = document.getElementById('cursor');
+  cur.style.left  = x + 'px';
+  cur.style.top   = y + 'px';
+  cur.style.borderColor = color;
+  cur.style.boxShadow   = `0 0 8px ${color}, 0 0 20px ${color}33`;
+}
+
+// ═══════════════════════════════════════════════════
+//  SCAN RING ANIMATION
+// ═══════════════════════════════════════════════════
+function animateScanRing() {
+  state.scanAngle = (state.scanAngle + 2) % 360;
+  const a = (state.scanAngle * Math.PI) / 180;
+  const cx = 30, cy = 30, r = 24;
+  const x1 = cx + r * Math.cos(a);
+  const y1 = cy + r * Math.sin(a);
+  const a2 = a + (Math.PI * 1.5);
+  const x2 = cx + r * Math.cos(a2);
+  const y2 = cy + r * Math.sin(a2);
+  document.getElementById('scanArc').setAttribute(
+    'd', `M ${x1} ${y1} A ${r} ${r} 0 1 1 ${x2} ${y2}`
+  );
+  requestAnimationFrame(animateScanRing);
+}
+animateScanRing();
+
+// ═══════════════════════════════════════════════════
+//  CLEAR ALL
+// ═══════════════════════════════════════════════════
+function clearAll() {
+  dctx.clearRect(0, 0, drawCvs.width, drawCvs.height);
+  document.querySelectorAll('.float-obj').forEach(el => el.remove());
+  state.objects = [];
+  state.selectedObj = null;
+  showToast('CANVAS CLEARED');
+}
+
+// ═══════════════════════════════════════════════════
+//  UI BUTTONS
+// ═══════════════════════════════════════════════════
+document.getElementById('btnDraw').addEventListener('click', () => {
+  state.tool = 'draw';
+  document.getElementById('btnDraw').classList.add('active');
+  document.getElementById('btnErase').classList.remove('active');
+  showToast('DRAW MODE');
+});
+
+document.getElementById('btnErase').addEventListener('click', () => {
+  state.tool = 'erase';
+  document.getElementById('btnErase').classList.add('active');
+  document.getElementById('btnDraw').classList.remove('active');
+  showToast('ERASE MODE');
+});
+
+document.getElementById('btnClear').addEventListener('click', clearAll);
+
+document.getElementById('btnAddText').addEventListener('click', () => {
+  document.getElementById('textDialog').style.display = 'block';
+  document.getElementById('textInput').value = '';
+  document.getElementById('textInput').focus();
+});
+
+document.getElementById('btnTextCancel').addEventListener('click', () => {
+  document.getElementById('textDialog').style.display = 'none';
+});
+
+document.getElementById('btnTextOk').addEventListener('click', () => {
+  const txt = document.getElementById('textInput').value.trim().toUpperCase();
+  if (txt) {
+    createTextObj(txt, window.innerWidth/2 - 60, window.innerHeight/2 - 20);
+    showToast('OBJECT ADDED');
+  }
+  document.getElementById('textDialog').style.display = 'none';
+});
+
+document.getElementById('textInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btnTextOk').click();
+  if (e.key === 'Escape') document.getElementById('btnTextCancel').click();
+});
+
+document.getElementById('btnAddImg').addEventListener('click', () => {
+  document.getElementById('imgUpload').click();
+});
+
+document.getElementById('imgUpload').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    createImageObj(ev.target.result, window.innerWidth/2 - 140, window.innerHeight/2 - 80);
+    showToast('IMAGE LOADED');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+
+// color swatches
+document.getElementById('colorRow').addEventListener('click', e => {
+  if (!e.target.classList.contains('swatch')) return;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+  e.target.classList.add('active');
+  state.color = e.target.dataset.color;
+});
+
+document.getElementById('sizeSlider').addEventListener('input', e => {
+  state.brushSize = parseInt(e.target.value);
+});
+
+// hide gesture guide
+document.getElementById('hideGuide').addEventListener('click', () => {
+  document.getElementById('gestureGuide').style.display = 'none';
+});
+
+// mouse cursor tracking
+document.addEventListener('mousemove', e => {
+  const cur = document.getElementById('cursor');
+  cur.style.left = e.clientX + 'px';
+  cur.style.top  = e.clientY + 'px';
+});
+
+// ═══════════════════════════════════════════════════
+//  MOUSE DRAW (fallback — no hand needed)
+// ═══════════════════════════════════════════════════
+let mouseDown = false;
+let lastMouse = null;
+
+drawCvs.addEventListener('mousedown', e => {
+  if (e.target !== drawCvs) return;
+  mouseDown = true;
+  lastMouse = {x: e.clientX, y: e.clientY};
+});
+window.addEventListener('mouseup', () => { mouseDown = false; lastMouse = null; });
+drawCvs.addEventListener('mousemove', e => {
+  if (!mouseDown || !lastMouse) return;
+  if (state.tool === 'draw') {
+    drawGlowLine(dctx, lastMouse.x, lastMouse.y, e.clientX, e.clientY,
+                 state.color, state.brushSize);
+  } else {
+    eraseAt(e.clientX, e.clientY, 30);
+  }
+  lastMouse = {x: e.clientX, y: e.clientY};
+});
+
+// touch draw
+drawCvs.addEventListener('touchstart', e => {
+  mouseDown = true;
+  const t = e.touches[0];
+  lastMouse = {x: t.clientX, y: t.clientY};
+  e.preventDefault();
+}, {passive:false});
+drawCvs.addEventListener('touchend', () => { mouseDown = false; lastMouse = null; });
+drawCvs.addEventListener('touchmove', e => {
+  if (!mouseDown || !lastMouse) return;
+  const t = e.touches[0];
+  if (state.tool === 'draw') {
+    drawGlowLine(dctx, lastMouse.x, lastMouse.y, t.clientX, t.clientY,
+                 state.color, state.brushSize);
+  } else {
+    eraseAt(t.clientX, t.clientY, 30);
+  }
+  lastMouse = {x: t.clientX, y: t.clientY};
+  e.preventDefault();
+}, {passive:false});
+
+// ═══════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════
+setInterval(() => {
+  document.getElementById('timeLabel').textContent =
+    new Date().toLocaleTimeString('en-US', {hour12: false});
+}, 1000);
+
+// ═══════════════════════════════════════════════════
+//  CAMERA START
+// ═══════════════════════════════════════════════════
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 1280, height: 720, facingMode: 'user' }
+    });
+    video.srcObject = stream;
+    await video.play();
+
+    const camera = new Camera(video, {
+      onFrame: async () => { await hands.send({image: video}); },
+      width: 1280, height: 720
+    });
+    camera.start();
+    showToast('SYSTEM ONLINE', 2000);
+  } catch(err) {
+    console.error('Camera error:', err);
+    showToast('CAMERA ACCESS DENIED', 3000);
+  }
+}
+
+startCamera();
+
+// Add welcome text object after a short delay
+setTimeout(() => {
+  createTextObj('◈ J.A.R.V.I.S ONLINE', window.innerWidth/2 - 120, 90);
+}, 500);
+</script>
+</body>
+</html>
