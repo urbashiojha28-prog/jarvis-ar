@@ -1,1 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>J.A.R.V.I.S — Air Interface System</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 
+:root {
+  --c:   #00f0ff;
+  --c2:  #0066ff;
+  --g:   #00ff99;
+  --r:   #ff2255;
+  --y:   #ffbb00;
+  --w:   #ffffff;
+  --bg:  #010914;
+  --glow:   0 0 6px #00f0ff, 0 0 18px rgba(0,240,255,.25);
+  --glow-g: 0 0 6px #00ff99, 0 0 18px rgba(0,255,153,.25);
+  --glow-r: 0 0 6px #ff2255, 0 0 18px rgba(255,34,85,.25);
+  --glow-y: 0 0 6px #ffbb00, 0 0 18px rgba(255,187,0,.25);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Share Tech Mono',monospace;color:var(--c);cursor:none;}
+
+/* ── layers ── */
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:.5;z-index:0;}
+#drawCvs{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:all;}
+#uiCvs{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;}
+#objLayer{position:absolute;inset:0;z-index:3;pointer-events:none;}
+#hud{position:absolute;inset:0;z-index:4;pointer-events:none;}
+#panels{position:absolute;inset:0;z-index:5;pointer-events:none;}
+
+/* ── grid ── */
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,240,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(0,240,255,.045) 1px,transparent 1px);background-size:55px 55px;}
+
+/* ── corners ── */
+.crn{position:absolute;width:48px;height:48px;pointer-events:none;}
+.crn::before,.crn::after{content:'';position:absolute;background:var(--c);box-shadow:var(--glow);}
+.crn::before{width:2px;height:32px;top:0;left:0;}
+.crn::after{width:32px;height:2px;top:0;left:0;}
+.crn.tr{top:14px;right:14px;transform:scaleX(-1);}
+.crn.tl{top:14px;left:14px;}
+.crn.bl{bottom:52px;left:14px;transform:scaleY(-1);}
+.crn.br{bottom:52px;right:14px;transform:scale(-1);}
+
+/* ── top bar ── */
+#top{position:absolute;top:0;left:0;right:0;height:44px;background:linear-gradient(rgba(1,9,20,.95),transparent);border-bottom:1px solid rgba(0,240,255,.12);display:flex;align-items:center;padding:0 20px;gap:20px;pointer-events:none;}
+.logo{font-family:'Orbitron',monospace;font-weight:900;font-size:13px;letter-spacing:5px;color:var(--c);text-shadow:var(--glow);}
+.topinfo{font-size:10px;color:rgba(0,240,255,.5);letter-spacing:2px;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--g);box-shadow:var(--glow-g);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#clock{margin-left:auto;font-size:11px;color:rgba(0,240,255,.6);}
+
+/* ── bottom bar ── */
+#bot{position:absolute;bottom:0;left:0;right:0;height:44px;background:linear-gradient(transparent,rgba(1,9,20,.97));border-top:1px solid rgba(0,240,255,.12);display:flex;align-items:center;padding:0 20px;gap:24px;pointer-events:none;}
+#gLabel{font-family:'Orbitron',monospace;font-size:11px;font-weight:700;letter-spacing:3px;color:var(--c);text-shadow:var(--glow);min-width:200px;}
+#fpsEl{font-size:10px;color:rgba(0,240,255,.4);margin-left:auto;}
+#objCount{font-size:10px;color:rgba(0,240,255,.4);}
+
+/* ── left panel ── */
+#leftPanel{position:absolute;top:56px;left:14px;width:52px;display:flex;flex-direction:column;gap:6px;pointer-events:all;}
+.tb{width:44px;height:44px;background:rgba(0,15,35,.85);border:1px solid rgba(0,240,255,.2);color:var(--c);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative;}
+.tb:hover{background:rgba(0,240,255,.12);border-color:var(--c);box-shadow:var(--glow);}
+.tb.on{background:rgba(0,240,255,.18);border-color:var(--c);box-shadow:var(--glow);}
+.tb-tip{position:absolute;left:54px;top:50%;transform:translateY(-50%);background:rgba(0,10,25,.95);border:1px solid rgba(0,240,255,.3);color:var(--c);font-size:10px;white-space:nowrap;padding:4px 10px;letter-spacing:1px;opacity:0;pointer-events:none;transition:opacity .2s;}
+.tb:hover .tb-tip{opacity:1;}
+.sep{height:1px;background:rgba(0,240,255,.15);margin:2px 0;}
+
+/* ── right panel ── */
+#rightPanel{position:absolute;top:56px;right:14px;width:160px;display:flex;flex-direction:column;gap:6px;pointer-events:all;}
+.sec-lbl{font-size:9px;letter-spacing:3px;color:rgba(0,240,255,.35);padding:2px 0;}
+.rpBtn{width:100%;background:rgba(0,15,35,.85);border:1px solid rgba(0,240,255,.2);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:10px;padding:7px 10px;cursor:pointer;letter-spacing:1px;text-align:left;transition:all .2s;display:flex;align-items:center;gap:6px;}
+.rpBtn:hover{background:rgba(0,240,255,.1);border-color:var(--c);box-shadow:var(--glow);}
+.rpBtn.on{background:rgba(0,240,255,.15);border-color:var(--c);}
+#colorRow{display:flex;gap:5px;flex-wrap:wrap;}
+.sw{width:22px;height:22px;border-radius:2px;border:1px solid rgba(255,255,255,.15);cursor:pointer;transition:transform .15s,box-shadow .15s;}
+.sw:hover,.sw.on{transform:scale(1.3);border-color:#fff;}
+#szSlider{width:100%;accent-color:var(--c);cursor:pointer;margin:2px 0;}
+#opSlider{width:100%;accent-color:var(--c);cursor:pointer;margin:2px 0;}
+
+/* ── gesture guide ── */
+#guide{position:absolute;bottom:56px;left:14px;background:rgba(0,8,20,.88);border:1px solid rgba(0,240,255,.18);padding:10px 12px;font-size:9.5px;line-height:2;color:rgba(0,240,255,.65);pointer-events:all;}
+.g-ttl{font-family:'Orbitron',monospace;font-size:8px;letter-spacing:3px;color:var(--c);margin-bottom:4px;text-shadow:var(--glow);}
+.gr{display:flex;gap:6px;align-items:center;}
+.gi{font-size:12px;min-width:18px;}
+#guideClose{font-size:9px;color:rgba(0,240,255,.3);cursor:pointer;text-align:center;margin-top:6px;letter-spacing:1px;}
+#guideClose:hover{color:var(--c);}
+
+/* ── toast ── */
+#toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Orbitron',monospace;font-size:20px;font-weight:900;letter-spacing:6px;color:var(--c);text-shadow:var(--glow);opacity:0;pointer-events:none;transition:opacity .15s;text-align:center;white-space:nowrap;}
+
+/* ── scan ring ── */
+#scanSvg{position:absolute;bottom:56px;right:18px;width:56px;height:56px;pointer-events:none;}
+
+/* ── cursor ── */
+#cur{position:fixed;width:18px;height:18px;border-radius:50%;border:2px solid var(--c);box-shadow:var(--glow);pointer-events:none;transform:translate(-50%,-50%);z-index:9999;transition:border-color .1s,box-shadow .1s,width .1s,height .1s;}
+
+/* ── floating objects ── */
+.fobj{position:absolute;pointer-events:all;user-select:none;border:1px solid rgba(0,240,255,.35);background:rgba(0,12,30,.78);cursor:grab;transition:box-shadow .2s,border-color .2s;}
+.fobj:active{cursor:grabbing;}
+.fobj.sel{border-color:var(--g);box-shadow:var(--glow-g);}
+.fobj.sel .fobj-bar{background:rgba(0,255,153,.08);}
+.fobj-bar{display:flex;align-items:center;gap:4px;padding:3px 6px;background:rgba(0,240,255,.06);border-bottom:1px solid rgba(0,240,255,.15);cursor:grab;}
+.fobj-bar:active{cursor:grabbing;}
+.fobj-title{font-size:8px;letter-spacing:2px;color:rgba(0,240,255,.5);flex:1;pointer-events:none;}
+.fobj-btn{width:16px;height:16px;border:1px solid rgba(0,240,255,.25);background:transparent;color:rgba(0,240,255,.6);font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.fobj-btn:hover{background:rgba(0,240,255,.15);color:#fff;border-color:var(--c);}
+.fobj-btn.x:hover{background:rgba(255,34,85,.2);border-color:var(--r);color:var(--r);}
+.fobj-body{padding:6px 8px;min-width:60px;min-height:20px;}
+.fobj-text{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:2px;color:var(--c);text-shadow:var(--glow);white-space:nowrap;}
+.fobj img{display:block;width:100%;height:auto;pointer-events:none;}
+/* resize handle */
+.rh{position:absolute;bottom:0;right:0;width:14px;height:14px;background:var(--c);box-shadow:var(--glow);cursor:se-resize;opacity:.7;transition:opacity .15s;}
+.rh:hover{opacity:1;}
+/* rotate handle */
+.roth{position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;background:var(--y);box-shadow:var(--glow-y);cursor:crosshair;opacity:.7;transition:opacity .15s;}
+.roth:hover{opacity:1;}
+
+/* ── dialogs ── */
+.dlg{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,8,22,.97);border:1px solid var(--c);box-shadow:var(--glow);padding:22px;z-index:100;pointer-events:all;min-width:300px;}
+.dlg h3{font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:var(--c);margin-bottom:14px;text-shadow:var(--glow);}
+.dlg input[type=text],.dlg textarea{width:100%;background:rgba(0,20,45,.8);border:1px solid rgba(0,240,255,.3);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:13px;padding:8px 10px;outline:none;letter-spacing:1px;resize:vertical;}
+.dlg input[type=text]:focus,.dlg textarea:focus{border-color:var(--c);box-shadow:var(--glow);}
+.dlg-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+.dlg-btn{background:rgba(0,15,35,.9);border:1px solid rgba(0,240,255,.3);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:10px;padding:7px 16px;cursor:pointer;letter-spacing:1px;transition:all .2s;}
+.dlg-btn:hover{background:rgba(0,240,255,.12);border-color:var(--c);}
+.dlg-btn.pri{border-color:var(--c);background:rgba(0,240,255,.1);}
+
+/* sticker picker */
+#stickerGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0;max-height:160px;overflow-y:auto;}
+.stk{font-size:24px;cursor:pointer;text-align:center;padding:4px;border-radius:4px;transition:transform .15s,background .15s;}
+.stk:hover{transform:scale(1.3);background:rgba(0,240,255,.1);}
+
+#fileIn{display:none;}
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="drawCvs"></canvas>
+<canvas id="uiCvs"></canvas>
+<div id="objLayer"></div>
+
+<div id="hud">
+  <div class="grid"></div>
+  <div class="crn tl"></div><div class="crn tr"></div>
+  <div class="crn bl"></div><div class="crn br"></div>
+</div>
+
+<!-- TOP -->
+<div id="top">
+  <div class="logo">◈ J.A.R.V.I.S</div>
+  <div class="dot"></div>
+  <div class="topinfo" id="handSt">NO HAND</div>
+  <div id="clock">00:00:00</div>
+</div>
+
+<!-- BOTTOM -->
+<div id="bot">
+  <div id="gLabel">◌ STANDBY</div>
+  <div id="objCount">OBJ 00</div>
+  <div id="fpsEl">FPS --</div>
+</div>
+
+<!-- LEFT TOOLBAR -->
+<div id="leftPanel" id="panels">
+  <button class="tb on" id="tDraw" title=""><span>✏️</span><span class="tb-tip">DRAW [D]</span></button>
+  <button class="tb" id="tErase" title=""><span>⬜</span><span class="tb-tip">ERASE [E]</span></button>
+  <div class="sep"></div>
+  <button class="tb" id="tText"><span>🔤</span><span class="tb-tip">ADD TEXT [T]</span></button>
+  <button class="tb" id="tImg"><span>🖼️</span><span class="tb-tip">LOAD IMAGE [I]</span></button>
+  <button class="tb" id="tSticker"><span>😀</span><span class="tb-tip">STICKERS [S]</span></button>
+  <button class="tb" id="tSnap"><span>📷</span><span class="tb-tip">SNAPSHOT [P]</span></button>
+  <div class="sep"></div>
+  <button class="tb" id="tUndo"><span>↩️</span><span class="tb-tip">UNDO [Z]</span></button>
+  <button class="tb" id="tClear"><span>🗑️</span><span class="tb-tip">CLEAR ALL [C]</span></button>
+  <div class="sep"></div>
+  <button class="tb" id="tSave"><span>💾</span><span class="tb-tip">SAVE IMAGE</span></button>
+</div>
+
+<!-- RIGHT PANEL -->
+<div id="rightPanel" style="pointer-events:all;">
+  <div class="sec-lbl">BRUSH COLOR</div>
+  <div id="colorRow">
+    <div class="sw on" data-c="#00f0ff" style="background:#00f0ff"></div>
+    <div class="sw" data-c="#ff2255" style="background:#ff2255"></div>
+    <div class="sw" data-c="#00ff99" style="background:#00ff99"></div>
+    <div class="sw" data-c="#ffbb00" style="background:#ffbb00"></div>
+    <div class="sw" data-c="#ff6600" style="background:#ff6600"></div>
+    <div class="sw" data-c="#aa44ff" style="background:#aa44ff"></div>
+    <div class="sw" data-c="#ffffff" style="background:#ffffff"></div>
+    <div class="sw" data-c="#ff66cc" style="background:#ff66cc"></div>
+  </div>
+  <div class="sec-lbl" style="margin-top:6px">SIZE <span id="szVal">4</span></div>
+  <input type="range" id="szSlider" min="1" max="40" value="4">
+  <div class="sec-lbl">OPACITY <span id="opVal">100</span>%</div>
+  <input type="range" id="opSlider" min="10" max="100" value="100">
+  <div class="sep" style="margin:4px 0;"></div>
+  <div class="sec-lbl">BRUSH STYLE</div>
+  <button class="rpBtn on" id="bsNormal">◉ GLOW LINE</button>
+  <button class="rpBtn" id="bsDash">◎ DASHED</button>
+  <button class="rpBtn" id="bsNeon">★ NEON FAT</button>
+  <div class="sep" style="margin:4px 0;"></div>
+  <div class="sec-lbl">CANVAS</div>
+  <button class="rpBtn" id="bGrid">⊞ TOGGLE GRID</button>
+</div>
+
+<!-- GESTURE GUIDE -->
+<div id="guide">
+  <div class="g-ttl">GESTURES</div>
+  <div class="gr"><span class="gi">☝️</span>Index — Draw</div>
+  <div class="gr"><span class="gi">✌️</span>Peace — Select</div>
+  <div class="gr"><span class="gi">✊</span>Fist — Drag sel.</div>
+  <div class="gr"><span class="gi">🤏</span>Pinch — Resize sel.</div>
+  <div class="gr"><span class="gi">🖐</span>Open — Erase</div>
+  <div class="gr"><span class="gi">👍</span>Thumb — Clear</div>
+  <div id="guideClose">[ HIDE ]</div>
+</div>
+
+<!-- SCAN RING -->
+<svg id="scanSvg" viewBox="0 0 56 56">
+  <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,240,255,.12)" stroke-width="1"/>
+  <circle cx="28" cy="28" r="14" fill="none" stroke="rgba(0,240,255,.07)" stroke-width="1"/>
+  <path id="arc1" fill="none" stroke="#00f0ff" stroke-width="2" stroke-linecap="round"/>
+  <path id="arc2" fill="none" stroke="rgba(0,240,255,.3)" stroke-width="1" stroke-linecap="round"/>
+  <circle cx="28" cy="28" r="2.5" fill="#00f0ff"/>
+</svg>
+
+<!-- CURSOR -->
+<div id="cur"></div>
+
+<!-- DIALOGS -->
+<div class="dlg" id="dlgText">
+  <h3>◈ ADD FLOATING TEXT</h3>
+  <input type="text" id="txtIn" placeholder="TYPE SOMETHING..." maxlength="50" autocomplete="off">
+  <div class="dlg-btns">
+    <button class="dlg-btn" id="txtCancel">CANCEL</button>
+    <button class="dlg-btn pri" id="txtOk">ADD →</button>
+  </div>
+</div>
+
+<div class="dlg" id="dlgSticker">
+  <h3>◈ ADD STICKER</h3>
+  <div id="stickerGrid"></div>
+  <div class="dlg-btns">
+    <button class="dlg-btn" id="stickerClose">CLOSE</button>
+  </div>
+</div>
+
+<input type="file" id="fileIn" accept="image/*">
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  SETUP
+// ════════════════════════════════════════════════════════
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
+
+const video   = document.getElementById('video');
+const dCvs    = document.getElementById('drawCvs');
+const uCvs    = document.getElementById('uiCvs');
+const dCtx    = dCvs.getContext('2d');
+const uCtx    = uCvs.getContext('2d');
+const objLayer= document.getElementById('objLayer');
+
+function resize(){
+  dCvs.width = uCvs.width = W();
+  dCvs.height= uCvs.height= H();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── state ────────────────────────────────────────────────
+const S = {
+  tool:       'draw',
+  color:      '#00f0ff',
+  brushSize:  4,
+  opacity:    1,
+  brushStyle: 'glow',
+  gesture:    'none',
+  prevGest:   'none',
+  lastPt:     null,
+  undoStack:  [],
+  fps:        0,
+  ft:         0,
+  scanA:      0,
+  // object interaction
+  selObj:     null,
+  dragOX:     0, dragOY: 0,   // offset of finger from obj top-left
+  pinchD0:    0, pinchW0: 0, pinchH0: 0,
+  rotStart:   0, rotObj0: 0,
+  handPresent: false,
+};
+
+// ════════════════════════════════════════════════════════
+//  DRAWING TOOLS
+// ════════════════════════════════════════════════════════
+function pushUndo(){
+  S.undoStack.push(dCtx.getImageData(0,0,W(),H()));
+  if(S.undoStack.length>30) S.undoStack.shift();
+}
+
+function drawStroke(x1,y1,x2,y2){
+  dCtx.save();
+  dCtx.globalAlpha = S.opacity;
+  dCtx.lineCap = 'round';
+  dCtx.lineJoin = 'round';
+  const col = S.color;
+  const sz  = S.brushSize;
+
+  if(S.brushStyle === 'glow'){
+    // outer glow
+    dCtx.globalAlpha = S.opacity * 0.07;
+    dCtx.strokeStyle = col; dCtx.lineWidth = sz*5;
+    dCtx.shadowBlur=0;
+    line(x1,y1,x2,y2);
+    dCtx.globalAlpha = S.opacity * 0.15;
+    dCtx.lineWidth = sz*2.5; line(x1,y1,x2,y2);
+    // core
+    dCtx.globalAlpha = S.opacity;
+    dCtx.lineWidth = sz;
+    dCtx.shadowBlur = 14; dCtx.shadowColor = col;
+    line(x1,y1,x2,y2);
+  } else if(S.brushStyle === 'dash'){
+    dCtx.globalAlpha = S.opacity;
+    dCtx.strokeStyle = col; dCtx.lineWidth = sz;
+    dCtx.setLineDash([12,6]);
+    dCtx.shadowBlur = 8; dCtx.shadowColor = col;
+    line(x1,y1,x2,y2);
+  } else if(S.brushStyle === 'neon'){
+    dCtx.globalAlpha = S.opacity * 0.12;
+    dCtx.strokeStyle = col; dCtx.lineWidth = sz*8; line(x1,y1,x2,y2);
+    dCtx.globalAlpha = S.opacity * 0.3;
+    dCtx.lineWidth = sz*4; line(x1,y1,x2,y2);
+    dCtx.globalAlpha = S.opacity;
+    dCtx.lineWidth = sz;
+    dCtx.strokeStyle = '#fff';
+    dCtx.shadowBlur = 20; dCtx.shadowColor = col;
+    line(x1,y1,x2,y2);
+  }
+  dCtx.restore();
+}
+
+function line(x1,y1,x2,y2){
+  dCtx.beginPath(); dCtx.moveTo(x1,y1); dCtx.lineTo(x2,y2); dCtx.stroke();
+}
+
+function doErase(x,y,r){
+  dCtx.save();
+  dCtx.globalCompositeOperation='destination-out';
+  dCtx.beginPath(); dCtx.arc(x,y,r,0,Math.PI*2);
+  dCtx.fillStyle='rgba(0,0,0,1)'; dCtx.fill();
+  dCtx.restore();
+}
+
+// ════════════════════════════════════════════════════════
+//  FLOATING OBJECTS — properly working drag/resize/rotate
+// ════════════════════════════════════════════════════════
+let oid = 0;
+
+function makeObj(type, content, x, y, w, h){
+  const id = 'o'+(++oid);
+  const el = document.createElement('div');
+  el.className = 'fobj';
+  el.id = id;
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;${h?'height:'+h+'px;':''}position:absolute;`;
+
+  // title bar (drag handle)
+  const bar = document.createElement('div');
+  bar.className = 'fobj-bar';
+
+  const ttl = document.createElement('div');
+  ttl.className = 'fobj-title';
+  ttl.textContent = type.toUpperCase();
+
+  // buttons
+  const btnDup = mkBtn('⧉','Duplicate');
+  const btnDel = mkBtn('✕','Delete'); btnDel.classList.add('x');
+  bar.appendChild(ttl); bar.appendChild(btnDup); bar.appendChild(btnDel);
+
+  // body
+  const body = document.createElement('div');
+  body.className = 'fobj-body';
+  if(type==='text'){
+    const span = document.createElement('div');
+    span.className = 'fobj-text';
+    span.textContent = content;
+    span.contentEditable = true;
+    span.spellcheck = false;
+    span.style.outline = 'none';
+    body.appendChild(span);
+  } else if(type==='image'||type==='snapshot'){
+    const img = document.createElement('img');
+    img.src = content;
+    img.draggable = false;
+    body.style.padding = '0';
+    body.appendChild(img);
+  } else if(type==='sticker'){
+    const s = document.createElement('div');
+    s.style.cssText = 'font-size:48px;text-align:center;padding:4px 8px;';
+    s.textContent = content;
+    body.appendChild(s);
+  }
+
+  // resize handle
+  const rh = document.createElement('div'); rh.className='rh';
+  // rotate handle
+  const ro = document.createElement('div'); ro.className='roth';
+
+  el.appendChild(ro);
+  el.appendChild(bar);
+  el.appendChild(body);
+  el.appendChild(rh);
+  objLayer.appendChild(el);
+
+  // ── drag via title bar ──────────────────────────────
+  setupDrag(bar, el);
+
+  // ── resize via handle ───────────────────────────────
+  setupResize(rh, el);
+
+  // ── rotate via handle ───────────────────────────────
+  setupRotate(ro, el);
+
+  // ── select on click ─────────────────────────────────
+  el.addEventListener('pointerdown', ()=>{ selectObj(el); }, true);
+
+  // ── button actions ───────────────────────────────────
+  btnDel.addEventListener('click', e=>{
+    e.stopPropagation();
+    el.style.transition='opacity .2s,transform .2s';
+    el.style.opacity='0'; el.style.transform+=' scale(.8)';
+    setTimeout(()=>el.remove(),200);
+    if(S.selObj===el) S.selObj=null;
+    updateObjCount();
+  });
+  btnDup.addEventListener('click', e=>{
+    e.stopPropagation();
+    const nx = el.offsetLeft+20, ny = el.offsetTop+20;
+    makeObj(type, content, nx, ny, el.offsetWidth, el.offsetHeight||null);
+  });
+
+  // fade in
+  el.style.opacity='0'; el.style.transform=(el.style.transform||'')+'scale(.85)';
+  el.style.transition='opacity .25s,transform .25s';
+  requestAnimationFrame(()=>{ el.style.opacity='1'; el.style.transform=el.style.transform.replace('scale(.85)','scale(1)'); });
+  setTimeout(()=>el.style.transition='', 300);
+
+  selectObj(el);
+  updateObjCount();
+  return el;
+}
+
+function mkBtn(icon, tip){
+  const b = document.createElement('button');
+  b.className='fobj-btn'; b.textContent=icon; b.title=tip; return b;
+}
+
+function selectObj(el){
+  document.querySelectorAll('.fobj').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+  S.selObj = el;
+  objLayer.appendChild(el); // bring to front
+}
+
+function updateObjCount(){
+  document.getElementById('objCount').textContent = 'OBJ '+String(objLayer.children.length).padStart(2,'0');
+}
+
+// ── Proper drag: tracks pointermove on window ──────────
+function setupDrag(handle, el){
+  let active=false, startX=0, startY=0, origL=0, origT=0;
+  handle.addEventListener('pointerdown', e=>{
+    if(e.target.classList.contains('fobj-btn')) return;
+    active=true;
+    startX=e.clientX; startY=e.clientY;
+    origL=el.offsetLeft; origT=el.offsetTop;
+    handle.setPointerCapture(e.pointerId);
+    el.style.transition='none';
+    e.stopPropagation();
+  });
+  handle.addEventListener('pointermove', e=>{
+    if(!active) return;
+    el.style.left = Math.max(0, origL + e.clientX - startX) + 'px';
+    el.style.top  = Math.max(0, origT + e.clientY - startY) + 'px';
+  });
+  handle.addEventListener('pointerup', ()=>{ active=false; });
+}
+
+// ── Proper resize: pointer capture on handle ───────────
+function setupResize(rh, el){
+  let active=false, sx=0, sy=0, sw=0, sh=0;
+  rh.addEventListener('pointerdown', e=>{
+    active=true;
+    sx=e.clientX; sy=e.clientY;
+    sw=el.offsetWidth; sh=el.offsetHeight;
+    rh.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  rh.addEventListener('pointermove', e=>{
+    if(!active) return;
+    const nw = Math.max(80, sw + e.clientX - sx);
+    const nh = Math.max(40, sh + e.clientY - sy);
+    el.style.width  = nw+'px';
+    el.style.height = nh+'px';
+    e.preventDefault();
+  });
+  rh.addEventListener('pointerup', ()=>{ active=false; });
+}
+
+// ── Rotate handle ──────────────────────────────────────
+function setupRotate(ro, el){
+  let active=false, startAngle=0, curRot=0;
+  ro.addEventListener('pointerdown', e=>{
+    active=true;
+    const r = el.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    startAngle = Math.atan2(e.clientY-cy, e.clientX-cx) * 180/Math.PI;
+    curRot = getCurrentRotation(el);
+    ro.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  ro.addEventListener('pointermove', e=>{
+    if(!active) return;
+    const r = el.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    const ang = Math.atan2(e.clientY-cy, e.clientX-cx) * 180/Math.PI;
+    el.style.transform = `rotate(${curRot + ang - startAngle}deg)`;
+  });
+  ro.addEventListener('pointerup', ()=>{ active=false; });
+}
+
+function getCurrentRotation(el){
+  const st = window.getComputedStyle(el).transform;
+  if(!st || st==='none') return 0;
+  const m = new DOMMatrixReadOnly(st);
+  return Math.atan2(m.m12, m.m11) * 180/Math.PI;
+}
+
+// ════════════════════════════════════════════════════════
+//  GESTURE RECOGNITION
+// ════════════════════════════════════════════════════════
+function fUp(lm,tip,pip){ return lm[tip].y < lm[pip].y; }
+
+function classify(lm){
+  const idx  = fUp(lm,8,6);
+  const mid  = fUp(lm,12,10);
+  const rng  = fUp(lm,16,14);
+  const pnk  = fUp(lm,20,18);
+  const thY  = lm[4].y < lm[2].y; // thumb up in frame
+
+  // pinch
+  const pd = Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y);
+  if(pd < 0.055) return 'pinch';
+
+  if( idx && !mid && !rng && !pnk) return 'draw';
+  if( idx &&  mid && !rng && !pnk) return 'select';
+  if(!idx && !mid && !rng && !pnk && !thY) return 'fist';
+  if( idx &&  mid &&  rng &&  pnk) return 'erase';
+  if(!idx && !mid && !rng && !pnk &&  thY) return 'thumbs';
+  return 'none';
+}
+
+function pinchDist(lm){
+  return Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y);
+}
+function lmPx(lm,i){ return { x:(1-lm[i].x)*W(), y:lm[i].y*H() }; }
+
+// ════════════════════════════════════════════════════════
+//  MEDIAPIPE
+// ════════════════════════════════════════════════════════
+const mpHands = new Hands({
+  locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+});
+mpHands.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:.7, minTrackingConfidence:.6 });
+mpHands.onResults(onResults);
+
+const GESTURE_LABELS = {
+  draw:'✏  DRAW', select:'✌  SELECT', fist:'✊  DRAG',
+  erase:'🖐  ERASE', pinch:'🤏  RESIZE', thumbs:'👍  CLEAR', none:'◌  STANDBY'
+};
+
+function onResults(res){
+  uCtx.clearRect(0,0,W(),H());
+
+  const now=performance.now();
+  S.fps = Math.round(1000/Math.max(1,now-S.ft));
+  S.ft=now;
+  document.getElementById('fpsEl').textContent='FPS '+S.fps;
+
+  if(!res.multiHandLandmarks?.length){
+    S.handPresent=false;
+    document.getElementById('handSt').textContent='NO HAND';
+    S.lastPt=null; S.prevGest='none';
+    setGLabel('none'); return;
+  }
+  S.handPresent=true;
+  document.getElementById('handSt').textContent='◉ LOCKED';
+
+  const lm=res.multiHandLandmarks[0];
+  const ip=lmPx(lm,8);  // index tip
+  const tp=lmPx(lm,4);  // thumb tip
+  const g=classify(lm);
+  S.gesture=g;
+  setGLabel(g);
+
+  // draw skeleton
+  drawSkeleton(uCtx,lm);
+
+  // cursor
+  const cc={draw:'#00f0ff',erase:'#ff2255',select:'#00ff99',fist:'#ffbb00',pinch:'#0066ff'}[g]||'#fff';
+  const cr=g==='erase'?32:11;
+  drawRing(uCtx,ip.x,ip.y,cr,cc);
+  moveCursor(ip.x,ip.y,cc,g==='erase');
+
+  // ── DRAW ────────────────────────────────────────────
+  if(g==='draw' && S.tool==='draw'){
+    if(!S.lastPt) pushUndo();
+    if(S.lastPt) drawStroke(S.lastPt.x,S.lastPt.y,ip.x,ip.y);
+    S.lastPt=ip;
+    if(S.prevGest!=='draw') toast('DRAW');
+  } else { S.lastPt=null; }
+
+  // ── ERASE gesture ────────────────────────────────────
+  if(g==='erase'){
+    doErase(ip.x,ip.y,S.brushSize*4+10);
+    if(S.prevGest!=='erase') toast('ERASE');
+  }
+
+  // ── SELECT — find obj under finger ──────────────────
+  if(g==='select'){
+    const hit = objUnder(ip.x,ip.y);
+    document.querySelectorAll('.fobj').forEach(o=>o.classList.remove('sel'));
+    if(hit){ hit.classList.add('sel'); S.selObj=hit; }
+    else S.selObj=null;
+    if(S.prevGest!=='select') toast('SELECT');
+  }
+
+  // ── DRAG — move selected obj ─────────────────────────
+  if(g==='fist' && S.selObj){
+    if(S.prevGest!=='fist'){
+      toast('DRAG');
+      // compute offset from finger to obj top-left
+      S.dragOX = ip.x - S.selObj.offsetLeft;
+      S.dragOY = ip.y - S.selObj.offsetTop;
+    }
+    S.selObj.style.left = Math.max(0, ip.x - S.dragOX) + 'px';
+    S.selObj.style.top  = Math.max(0, ip.y - S.dragOY) + 'px';
+  }
+
+  // ── PINCH — resize selected obj ──────────────────────
+  if(g==='pinch' && S.selObj){
+    const pd = pinchDist(lm) * W();
+    if(S.prevGest!=='pinch'){
+      toast('RESIZE');
+      S.pinchD0 = pd;
+      S.pinchW0 = S.selObj.offsetWidth;
+      S.pinchH0 = S.selObj.offsetHeight;
+    }
+    if(S.pinchD0>0){
+      const scale = pd / S.pinchD0;
+      S.selObj.style.width  = Math.max(60,  S.pinchW0 * scale) + 'px';
+      S.selObj.style.height = Math.max(40,  S.pinchH0 * scale) + 'px';
+    }
+  } else if(g!=='pinch'){ S.pinchD0=0; }
+
+  // ── THUMBS UP — clear all ────────────────────────────
+  if(g==='thumbs' && S.prevGest!=='thumbs') clearAll();
+
+  S.prevGest=g;
+}
+
+// ════════════════════════════════════════════════════════
+//  UI DRAWING HELPERS
+// ════════════════════════════════════════════════════════
+function drawSkeleton(ctx,lm){
+  const conn=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+    [5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],
+    [13,17],[17,18],[18,19],[19,20],[0,17]];
+  ctx.save();
+  ctx.strokeStyle='rgba(0,240,255,.22)'; ctx.lineWidth=1;
+  conn.forEach(([a,b])=>{
+    const pa=lmPx(lm,a),pb=lmPx(lm,b);
+    ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
+  });
+  lm.forEach((_,i)=>{
+    const p=lmPx(lm,i);
+    ctx.beginPath(); ctx.arc(p.x,p.y,2.5,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,240,255,.45)'; ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawRing(ctx,x,y,r,col){
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.strokeStyle=col; ctx.lineWidth=2;
+  ctx.shadowBlur=14; ctx.shadowColor=col;
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2);
+  ctx.fillStyle=col; ctx.fill();
+  ctx.restore();
+}
+
+const cur=document.getElementById('cur');
+function moveCursor(x,y,col,big){
+  cur.style.left=x+'px'; cur.style.top=y+'px';
+  cur.style.borderColor=col;
+  cur.style.boxShadow=`0 0 8px ${col},0 0 20px ${col}44`;
+  cur.style.width=cur.style.height=(big?32:18)+'px';
+}
+
+// find topmost object whose bounding rect contains (x,y)
+function objUnder(x,y){
+  const els=[...objLayer.querySelectorAll('.fobj')];
+  for(let i=els.length-1;i>=0;i--){
+    const r=els[i].getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) return els[i];
+  }
+  return null;
+}
+
+// ════════════════════════════════════════════════════════
+//  SCAN RING
+// ════════════════════════════════════════════════════════
+function arc(cx,cy,r,start,end){
+  const s=start*Math.PI/180, e=end*Math.PI/180;
+  return `M${cx+r*Math.cos(s)},${cy+r*Math.sin(s)}A${r},${r},0,${end-start>180?1:0},1,${cx+r*Math.cos(e)},${cy+r*Math.sin(e)}`;
+}
+(function scanLoop(){
+  S.scanA=(S.scanA+1.8)%360;
+  document.getElementById('arc1').setAttribute('d',arc(28,28,22,S.scanA,S.scanA+220));
+  document.getElementById('arc2').setAttribute('d',arc(28,28,14,S.scanA+180,S.scanA+360));
+  requestAnimationFrame(scanLoop);
+})();
+
+// ════════════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════════════
+let toastT=null;
+function toast(msg,dur=1100){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.style.opacity='0',dur);
+}
+
+function setGLabel(g){
+  document.getElementById('gLabel').textContent=GESTURE_LABELS[g]||'◌ '+g.toUpperCase();
+}
+
+// ════════════════════════════════════════════════════════
+//  CLEAR & UNDO
+// ════════════════════════════════════════════════════════
+function clearAll(){
+  dCtx.clearRect(0,0,W(),H());
+  [...objLayer.querySelectorAll('.fobj')].forEach(el=>{
+    el.style.transition='opacity .15s'; el.style.opacity='0';
+    setTimeout(()=>el.remove(),160);
+  });
+  S.selObj=null; S.undoStack=[];
+  toast('CLEARED'); updateObjCount();
+}
+
+// ════════════════════════════════════════════════════════
+//  MOUSE / TOUCH DRAW (no hand needed)
+// ════════════════════════════════════════════════════════
+let mDown=false, mLast=null;
+
+dCvs.addEventListener('pointerdown', e=>{
+  if(e.target!==dCvs) return;
+  mDown=true; mLast={x:e.clientX,y:e.clientY};
+  pushUndo();
+  dCvs.setPointerCapture(e.pointerId);
+});
+dCvs.addEventListener('pointermove', e=>{
+  if(!mDown||!mLast) return;
+  if(S.tool==='draw') drawStroke(mLast.x,mLast.y,e.clientX,e.clientY);
+  else doErase(e.clientX,e.clientY,S.brushSize*4+10);
+  mLast={x:e.clientX,y:e.clientY};
+});
+dCvs.addEventListener('pointerup', ()=>{ mDown=false; mLast=null; });
+
+// mouse cursor
+document.addEventListener('mousemove',e=>{
+  cur.style.left=e.clientX+'px'; cur.style.top=e.clientY+'px';
+});
+
+// ════════════════════════════════════════════════════════
+//  STICKERS
+// ════════════════════════════════════════════════════════
+const STICKERS='😀🔥⚡🌟💫🎯🚀🛸🤖👾💎🌀🔮🌈🎆💥🌊🦾🧿🎭🕹️🦅🐉🏆🎪🎠🌙⭐🌺🎵'.split('');
+const sg=document.getElementById('stickerGrid');
+STICKERS.forEach(s=>{
+  const d=document.createElement('div'); d.className='stk'; d.textContent=s;
+  d.addEventListener('click',()=>{
+    makeObj('sticker',s,W()/2-50,H()/2-50,100,null);
+    document.getElementById('dlgSticker').style.display='none';
+    toast('STICKER ADDED');
+  });
+  sg.appendChild(d);
+});
+
+// ════════════════════════════════════════════════════════
+//  TOOLBAR BUTTONS
+// ════════════════════════════════════════════════════════
+function setTool(t){
+  S.tool=t;
+  document.getElementById('tDraw').classList.toggle('on',t==='draw');
+  document.getElementById('tErase').classList.toggle('on',t==='erase');
+  dCvs.style.cursor = t==='erase' ? 'none' : 'none';
+  toast(t.toUpperCase()+' MODE');
+}
+
+document.getElementById('tDraw').onclick=()=>setTool('draw');
+document.getElementById('tErase').onclick=()=>setTool('erase');
+document.getElementById('tClear').onclick=clearAll;
+document.getElementById('tUndo').onclick=()=>{
+  if(!S.undoStack.length){ toast('NOTHING TO UNDO'); return; }
+  dCtx.putImageData(S.undoStack.pop(),0,0); toast('UNDO');
+};
+document.getElementById('tText').onclick=()=>{
+  document.getElementById('dlgText').style.display='block';
+  document.getElementById('txtIn').value='';
+  document.getElementById('txtIn').focus();
+};
+document.getElementById('tSticker').onclick=()=>{
+  document.getElementById('dlgSticker').style.display='block';
+};
+document.getElementById('tImg').onclick=()=>document.getElementById('fileIn').click();
+document.getElementById('tSnap').onclick=()=>{
+  const tmp=document.createElement('canvas');
+  tmp.width=W(); tmp.height=H();
+  const c=tmp.getContext('2d');
+  c.save(); c.scale(-1,1); c.translate(-W(),0);
+  c.drawImage(video,0,0,W(),H()); c.restore();
+  makeObj('snapshot',tmp.toDataURL(),W()/2-160,H()/2-90,320,null);
+  toast('SNAPSHOT ADDED');
+};
+document.getElementById('tSave').onclick=()=>{
+  const tmp=document.createElement('canvas');
+  tmp.width=W(); tmp.height=H();
+  const c=tmp.getContext('2d');
+  c.fillStyle='#010914'; c.fillRect(0,0,W(),H());
+  c.drawImage(dCvs,0,0);
+  const a=document.createElement('a');
+  a.download='jarvis-canvas.png'; a.href=tmp.toDataURL();
+  a.click(); toast('SAVED!');
+};
+
+// brush style buttons
+['bsNormal','bsDash','bsNeon'].forEach(id=>{
+  document.getElementById(id).onclick=function(){
+    ['bsNormal','bsDash','bsNeon'].forEach(i=>document.getElementById(i).classList.remove('on'));
+    this.classList.add('on');
+    S.brushStyle={bsNormal:'glow',bsDash:'dash',bsNeon:'neon'}[id];
+    toast(S.brushStyle.toUpperCase()+' BRUSH');
+  };
+});
+
+document.getElementById('bGrid').onclick=()=>{
+  const g=document.querySelector('.grid');
+  g.style.opacity=g.style.opacity==='0'?'1':'0';
+};
+
+// color swatches
+document.getElementById('colorRow').addEventListener('click',e=>{
+  const sw=e.target.closest('.sw'); if(!sw) return;
+  document.querySelectorAll('.sw').forEach(s=>s.classList.remove('on'));
+  sw.classList.add('on');
+  S.color=sw.dataset.c;
+});
+
+// sliders
+const szSl=document.getElementById('szSlider');
+const opSl=document.getElementById('opSlider');
+szSl.oninput=()=>{ S.brushSize=+szSl.value; document.getElementById('szVal').textContent=szSl.value; };
+opSl.oninput=()=>{ S.opacity=opSl.value/100; document.getElementById('opVal').textContent=opSl.value; };
+
+// text dialog
+document.getElementById('txtOk').onclick=()=>{
+  const t=document.getElementById('txtIn').value.trim().toUpperCase();
+  if(t){ makeObj('text',t,W()/2-80,H()/2-30,240,null); toast('TEXT ADDED'); }
+  document.getElementById('dlgText').style.display='none';
+};
+document.getElementById('txtCancel').onclick=()=>document.getElementById('dlgText').style.display='none';
+document.getElementById('txtIn').addEventListener('keydown',e=>{
+  if(e.key==='Enter') document.getElementById('txtOk').click();
+  if(e.key==='Escape') document.getElementById('txtCancel').click();
+});
+document.getElementById('stickerClose').onclick=()=>document.getElementById('dlgSticker').style.display='none';
+
+// image upload
+document.getElementById('fileIn').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ makeObj('image',ev.target.result,W()/2-140,H()/2-90,280,null); toast('IMAGE LOADED'); };
+  r.readAsDataURL(f); e.target.value='';
+};
+
+// guide hide
+document.getElementById('guideClose').onclick=()=>document.getElementById('guide').style.display='none';
+
+// keyboard shortcuts
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('.dlg')||e.target.isContentEditable) return;
+  const k=e.key.toLowerCase();
+  if(k==='d') setTool('draw');
+  else if(k==='e') setTool('erase');
+  else if(k==='c'&&!e.ctrlKey) clearAll();
+  else if(k==='z'&&e.ctrlKey){ document.getElementById('tUndo').click(); }
+  else if(k==='t') document.getElementById('tText').click();
+  else if(k==='i') document.getElementById('fileIn').click();
+  else if(k==='s'&&!e.ctrlKey) document.getElementById('tSticker').click();
+  else if(k==='p') document.getElementById('tSnap').click();
+});
+
+// ════════════════════════════════════════════════════════
+//  CLOCK
+// ════════════════════════════════════════════════════════
+setInterval(()=>{
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-US',{hour12:false});
+},1000);
+
+// ════════════════════════════════════════════════════════
+//  CAMERA + MEDIAPIPE
+// ════════════════════════════════════════════════════════
+async function startCam(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720,facingMode:'user'}});
+    video.srcObject=stream;
+    await video.play();
+    const cam=new Camera(video,{
+      onFrame:async()=>{ await mpHands.send({image:video}); },
+      width:1280,height:720
+    });
+    cam.start();
+    toast('◈ SYSTEM ONLINE',2000);
+  }catch(err){
+    console.error(err);
+    toast('CAM DENIED — MOUSE MODE ACTIVE',3000);
+  }
+}
+startCam();
+
+// welcome object
+setTimeout(()=>makeObj('text','◈ JARVIS ONLINE',W()/2-130,60,300,null),600);
+
+// toast element injection
+const toastEl=document.createElement('div');
+toastEl.id='toast';
+toastEl.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Orbitron,monospace;font-size:20px;font-weight:900;letter-spacing:6px;color:#00f0ff;text-shadow:0 0 6px #00f0ff,0 0 18px rgba(0,240,255,.25);opacity:0;pointer-events:none;transition:opacity .15s;text-align:center;white-space:nowrap;z-index:50;';
+document.body.appendChild(toastEl);
+</script>
+</body>
+</html>
